@@ -117,17 +117,17 @@ pub const Cpu = struct {
                 else => std.debug.panic("Trying to read to an invalid register", .{})
             },
             .HIGH => switch (regs) {
-                .AX => self.ax = val & 0xFF00,
-                .BX => self.bx = val & 0xFF00,
-                .CX => self.cx = val & 0xFF00,
-                .DX => self.dx = val & 0xFF00,
+                .AX => self.ax = (self.ax & 0x00FF) | val & 0xFF00,
+                .BX => self.bx = (self.bx & 0x00FF) | val & 0xFF00,
+                .CX => self.cx = (self.cx & 0x00FF) | val & 0xFF00,
+                .DX => self.dx = (self.dx & 0x00FF) | val & 0xFF00,
                 else => std.debug.panic("Trying to read to an invalid HIGH half register", .{})
             },
             .LOW => switch (regs) {
-                .AX => self.ax = val & 0x00FF,
-                .BX => self.bx = val & 0x00FF,
-                .CX => self.cx = val & 0x00FF,
-                .DX => self.dx = val & 0x00FF,
+                .AX => self.ax = (self.ax & 0xFF00) | val & 0x00FF,
+                .BX => self.bx = (self.bx & 0xFF00) | val & 0x00FF,
+                .CX => self.cx = (self.cx & 0xFF00) | val & 0x00FF,
+                .DX => self.dx = (self.dx & 0xFF00) | val & 0x00FF,
                 else => std.debug.panic("Trying to read to an invalid LOW half register", .{})
             },
             _ => {}
