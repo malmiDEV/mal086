@@ -181,5 +181,5 @@ pub fn main() !void {
     }
     std.debug.print("\n",.{});
     var cpu = emu.cpu;
-    cpu.write_reg(.AX, .FULL, 0xd0f0);
+    cpu.write_reg(.AX, .FULL, 0xdead);
 }
