@@ -1,5 +1,9 @@
 const std = @import("std");
 
+pub const Error = error{
+    FileReadError, 
+};
+
 pub const OpMode = enum {
     Register,
     Immediate,
@@ -99,38 +103,41 @@ pub const Cpu = struct {
         };
     }
 
-    pub fn write_reg(self: *Cpu, regs: Register, half: RegisterHalf, val: u16) void {
+    pub fn write_reg16(self: *Cpu, regs: Register, val: u16) void {
+        switch (regs) {
+            .AX => self.ax = val,
+            .BX => self.bx = val,
+            .CX => self.cx = val,
+            .DX => self.dx = val,
+            .SI => self.si = val,
+            .DI => self.di = val,
+            .SP => self.sp = val,
+            .BP => self.bp = val,
+            .CS => self.cs = val,
+            .DS => self.ds = val,
+            .ES => self.es = val,
+            .SS => self.ss = val,
+            else => std.debug.panic("Trying to read to an invalid register", .{})
+        }
+    }
+
+    pub fn write_reg8(self: *Cpu, regs: Register, half: RegisterHalf, val: u8) void {
         switch (half) {
-            .FULL => switch (regs) {
-                .AX => self.ax = val,
-                .BX => self.bx = val,
-                .CX => self.cx = val,
-                .DX => self.dx = val,
-                .SI => self.si = val,
-                .DI => self.di = val,
-                .SP => self.sp = val,
-                .BP => self.bp = val,
-                .CS => self.cs = val,
-                .DS => self.ds = val,
-                .ES => self.es = val,
-                .SS => self.ss = val,
-                else => std.debug.panic("Trying to read to an invalid register", .{})
-            },
             .HIGH => switch (regs) {
-                .AX => self.ax = (self.ax & 0x00FF) | val & 0xFF00,
-                .BX => self.bx = (self.bx & 0x00FF) | val & 0xFF00,
-                .CX => self.cx = (self.cx & 0x00FF) | val & 0xFF00,
-                .DX => self.dx = (self.dx & 0x00FF) | val & 0xFF00,
-                else => std.debug.panic("Trying to read to an invalid HIGH half register", .{})
+                .AX => self.ax = (self.ax & 0x00FF) | @as(u16, @intCast(val)) << 8,
+                .BX => self.bx = (self.bx & 0x00FF) | @as(u16, @intCast(val)) << 8,
+                .CX => self.cx = (self.cx & 0x00FF) | @as(u16, @intCast(val)) << 8,
+                .DX => self.dx = (self.dx & 0x00FF) | @as(u16, @intCast(val)) << 8,
+                else => std.debug.panic("Trying to access an invalid HIGH half register", .{})
             },
             .LOW => switch (regs) {
-                .AX => self.ax = (self.ax & 0xFF00) | val & 0x00FF,
-                .BX => self.bx = (self.bx & 0xFF00) | val & 0x00FF,
-                .CX => self.cx = (self.cx & 0xFF00) | val & 0x00FF,
-                .DX => self.dx = (self.dx & 0xFF00) | val & 0x00FF,
-                else => std.debug.panic("Trying to read to an invalid LOW half register", .{})
+                .AX => self.ax = (self.ax & 0xFF00) | @as(u16, @intCast(val)),
+                .BX => self.bx = (self.bx & 0xFF00) | @as(u16, @intCast(val)),
+                .CX => self.cx = (self.cx & 0xFF00) | @as(u16, @intCast(val)),
+                .DX => self.dx = (self.dx & 0xFF00) | @as(u16, @intCast(val)),
+                else => std.debug.panic("Trying to access an invalid LOW half register", .{})
             },
-            _ => {}
+            else => std.debug.panic("Trying to access a 16bit register in 8bit writing mode", .{})
         }
     }
 };
@@ -161,7 +168,7 @@ pub const Emulator = struct {
         self.rom = try allocator.alloc(u8, file_size);
         const byte_read = try file.read(self.rom);
         if (byte_read != file_size) {
-            return error.FileReadError;
+            return Error.FileReadError;
         }
     }
 };
@@ -180,6 +187,11 @@ pub fn main() !void {
         std.debug.print("{x} ",.{emu.rom[i]});
     }
     std.debug.print("\n",.{});
+
+    // register test
     var cpu = emu.cpu;
-    cpu.write_reg(.AX, .FULL, 0xdead);
+    cpu.write_reg16(.AX, 0xdead);
+    cpu.write_reg8(.AX, .LOW, 0xef);
+    cpu.write_reg8(.AX, .HIGH, 0xbe);
+    std.debug.print("0x{x}\n",.{cpu.read_reg16(.AX)});
 }
