@@ -140,30 +140,46 @@ pub const Emulator = struct {
     ram: [0x100000]u8,
     rom: []u8, 
 
-    pub fn init() !Emulator { 
-        var emu = std.mem.zeroes(Emulator);
-        emu.cpu = try Cpu.init(0);
-        emu.ram = [_]u8{0}**0x100000;
-        return emu;
+    pub fn init() !Emulator {
+        return .{
+            .cpu = try Cpu.init(0),
+            .ram = [_]u8{0} ** 0x100000,
+            .rom = undefined
+        };
     }
 
-    pub fn loadRom(self: *Emulator, allocator: std.mem.Allocator, path: []const u8) ![]u8 {
-        _ = self;
-        _ = allocator;
+    pub fn loadRom(self: *Emulator, allocator: std.mem.Allocator, path: []const u8) !void {
+        const abs_path = try std.fs.realpathAlloc(allocator, path);
+        defer allocator.free(abs_path);
+
+        const file = try std.fs.openFileAbsolute(abs_path, .{ .mode = .read_only });
+        defer file.close();
+
+        const file_info = try file.stat();
+        const file_size = file_info.size;
+
+        self.rom = try allocator.alloc(u8, file_size);
+        const byte_read = try file.read(self.rom);
+        if (byte_read != file_size) {
+            return error.FileReadError;
+        }
     }
 };
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-    defer gpa.deinit();
+    defer _ = gpa.deinit();
 
     var emu = try Emulator.init();
-    emu.loadRom(allocator, "example/test.bin");
+    try emu.loadRom(allocator, "example/test.bin");
+    defer allocator.free(emu.rom);
 
+    // print the contents of the rom
+    for (0..emu.rom.len) |i| {
+        std.debug.print("{x} ",.{emu.rom[i]});
+    }
+    std.debug.print("\n",.{});
     var cpu = emu.cpu;
-
-
     cpu.write_reg(.AX, .FULL, 0xd0f0);
-    std.debug.print("{x}", .{cpu.read_reg8(.AX, .HIGH)});
 }

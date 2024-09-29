@@ -1,6 +1,6 @@
 bits 16
 mov ax, 10
-; mov bx, ax
+mov bx, ax
 ; mov dx, bx
 ; mov cx, dx
 ; mov al, 0xde 
