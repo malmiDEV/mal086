@@ -1,0 +1,1 @@
+nasm example/test.asm -f bin -o example/test.bin

@@ -32,10 +32,11 @@ pub const Register = enum(u4) {
     _   
 };
 
-pub const RegisterHalf = enum {
-    HIGH,
-    LOW,
-    FULL,
+pub const RegisterHalf = enum(u3) {
+    HIGH = 0x0,
+    LOW = 0x1,
+    FULL = 0x2,
+    _
 };
 
 pub const Cpu = struct { 
@@ -60,92 +61,109 @@ pub const Cpu = struct {
         return sys;
     }
 
-    pub fn read_reg(self: *Cpu, regs: Register, half: RegisterHalf) u16 {
-        return blk: { 
-            switch (half) {
-                RegisterHalf.FULL => switch (regs) {
-                    Register.AX => break :blk self.ax,
-                    Register.BX => break :blk self.bx,
-                    Register.CX => break :blk self.cx,
-                    Register.DX => break :blk self.dx,
-                    Register.SI => break :blk self.si,
-                    Register.DI => break :blk self.di,
-                    Register.SP => break :blk self.sp,
-                    Register.BP => break :blk self.bp,
-                    Register.CS => break :blk self.cs,
-                    Register.DS => break :blk self.ds,
-                    Register.ES => break :blk self.es,
-                    Register.SS => break :blk self.ss,
-                    else => std.debug.panic("Trying to read an invalid register", .{})
-                },
-                RegisterHalf.HIGH => switch (regs) {
-                    Register.AX => break :blk @intCast((self.ax & 0xFF00) >> 8),
-                    Register.BX => break :blk @intCast((self.bx & 0xFF00) >> 8),
-                    Register.CX => break :blk @intCast((self.cx & 0xFF00) >> 8),
-                    Register.DX => break :blk @intCast((self.dx & 0xFF00) >> 8),
-                    else => std.debug.panic("Trying to read an invalid HIGH half register", .{})
-                },
-                RegisterHalf.LOW => switch (regs) {
-                    Register.AX => break :blk @intCast(self.ax & 0x00FF),
-                    Register.BX => break :blk @intCast(self.bx & 0x00FF),
-                    Register.CX => break :blk @intCast(self.cx & 0x00FF),
-                    Register.DX => break :blk @intCast(self.dx & 0x00FF),
-                    else => std.debug.panic("Trying to read an invalid LOW half register", .{})
-                },
-            }
+    pub fn read_reg16(self: *Cpu, regs: Register) u16 {
+        return switch (regs) {
+            .AX => self.ax,
+            .BX => self.bx,
+            .CX => self.cx,
+            .DX => self.dx,
+            .SI => self.si,
+            .DI => self.di,
+            .SP => self.sp,
+            .BP => self.bp,
+            .CS => self.cs,
+            .DS => self.ds,
+            .ES => self.es,
+            .SS => self.ss,
+            else => std.debug.panic("Trying to read an invalid register", .{})
+        };
+    }
+
+    pub fn read_reg8(self: *Cpu, regs: Register, half: RegisterHalf) u8 {
+        return switch (half) {
+            .HIGH => switch (regs) {
+                .AX => @intCast((self.ax & 0xFF00) >> 8),
+                .BX => @intCast((self.bx & 0xFF00) >> 8),
+                .CX => @intCast((self.cx & 0xFF00) >> 8),
+                .DX => @intCast((self.dx & 0xFF00) >> 8),
+                else => std.debug.panic("Trying to read an invalid HIGH half register", .{})
+            },
+            .LOW => switch (regs) {
+                .AX => @intCast(self.ax & 0x00FF),
+                .BX => @intCast(self.bx & 0x00FF),
+                .CX => @intCast(self.cx & 0x00FF),
+                .DX => @intCast(self.dx & 0x00FF),
+                else => std.debug.panic("Trying to read an invalid LOW half register", .{})
+            },
+            else => std.debug.panic("Trying to read a 16bit register in 8bit reading mode", .{})
         };
     }
 
     pub fn write_reg(self: *Cpu, regs: Register, half: RegisterHalf, val: u16) void {
         switch (half) {
-            RegisterHalf.FULL => switch (regs) {
-                Register.AX => self.ax = val,
-                Register.BX => self.bx = val,
-                Register.CX => self.cx = val,
-                Register.DX => self.dx = val,
-                Register.SI => self.si = val,
-                Register.DI => self.di = val,
-                Register.SP => self.sp = val,
-                Register.BP => self.bp = val,
-                Register.CS => self.cs = val,
-                Register.DS => self.ds = val,
-                Register.ES => self.es = val,
-                Register.SS => self.ss = val,
+            .FULL => switch (regs) {
+                .AX => self.ax = val,
+                .BX => self.bx = val,
+                .CX => self.cx = val,
+                .DX => self.dx = val,
+                .SI => self.si = val,
+                .DI => self.di = val,
+                .SP => self.sp = val,
+                .BP => self.bp = val,
+                .CS => self.cs = val,
+                .DS => self.ds = val,
+                .ES => self.es = val,
+                .SS => self.ss = val,
                 else => std.debug.panic("Trying to read to an invalid register", .{})
             },
-            RegisterHalf.HIGH => switch (regs) {
-                Register.AX => self.ax = val & 0xFF00,
-                Register.BX => self.bx = val & 0xFF00,
-                Register.CX => self.cx = val & 0xFF00,
-                Register.DX => self.dx = val & 0xFF00,
+            .HIGH => switch (regs) {
+                .AX => self.ax = val & 0xFF00,
+                .BX => self.bx = val & 0xFF00,
+                .CX => self.cx = val & 0xFF00,
+                .DX => self.dx = val & 0xFF00,
                 else => std.debug.panic("Trying to read to an invalid HIGH half register", .{})
             },
-            RegisterHalf.LOW => switch (regs) {
-                Register.AX => self.ax = val & 0x00FF,
-                Register.BX => self.bx = val & 0x00FF,
-                Register.CX => self.cx = val & 0x00FF,
-                Register.DX => self.dx = val & 0x00FF,
+            .LOW => switch (regs) {
+                .AX => self.ax = val & 0x00FF,
+                .BX => self.bx = val & 0x00FF,
+                .CX => self.cx = val & 0x00FF,
+                .DX => self.dx = val & 0x00FF,
                 else => std.debug.panic("Trying to read to an invalid LOW half register", .{})
             },
+            _ => {}
         }
     }
 };
 
 pub const Emulator = struct {
     cpu: Cpu,
+    ram: [0x100000]u8,
+    rom: []u8, 
 
     pub fn init() !Emulator { 
         var emu = std.mem.zeroes(Emulator);
         emu.cpu = try Cpu.init(0);
+        emu.ram = [_]u8{0}**0x100000;
         return emu;
+    }
+
+    pub fn loadRom(self: *Emulator, allocator: std.mem.Allocator, path: []const u8) ![]u8 {
+        _ = self;
+        _ = allocator;
     }
 };
 
 pub fn main() !void {
-    //const allocator = std.heap.PageAllocator;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    defer gpa.deinit();
+
     var emu = try Emulator.init();
+    emu.loadRom(allocator, "example/test.bin");
+
     var cpu = emu.cpu;
-    //_ = cpu;
-    cpu.write_reg(Register.AX, RegisterHalf.FULL, 0xd0f0);
-    std.debug.print("{x}", .{cpu.read_reg(Register.AX, RegisterHalf.HIGH)});
+
+
+    cpu.write_reg(.AX, .FULL, 0xd0f0);
+    std.debug.print("{x}", .{cpu.read_reg8(.AX, .HIGH)});
 }
