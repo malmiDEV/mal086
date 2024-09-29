@@ -1,7 +1,7 @@
 # mal086
 8086 emulator written in zig
 
-final goal is run software like doom or ms-dos
+the ultimate goal of this project is running software like Doom or MS-DOS
 
 ## TODO
 
