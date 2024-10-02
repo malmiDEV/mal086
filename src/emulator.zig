@@ -37,9 +37,8 @@ pub const Register = enum(u4) {
 };
 
 pub const RegisterHalf = enum(u3) {
-    HIGH = 0x0,
     LOW = 0x1,
-    FULL = 0x2,
+    HIGH = 0x2,
     _
 };
 
@@ -86,17 +85,17 @@ pub const Cpu = struct {
     pub fn read_reg8(self: *Cpu, regs: Register, half: RegisterHalf) u8 {
         return switch (half) {
             .HIGH => switch (regs) {
-                .AX => @intCast((self.ax & 0xFF00) >> 8),
-                .BX => @intCast((self.bx & 0xFF00) >> 8),
-                .CX => @intCast((self.cx & 0xFF00) >> 8),
-                .DX => @intCast((self.dx & 0xFF00) >> 8),
+                .AX => @intCast((self.ax & 0xff00) >> 8),
+                .BX => @intCast((self.bx & 0xff00) >> 8),
+                .CX => @intCast((self.cx & 0xff00) >> 8),
+                .DX => @intCast((self.dx & 0xff00) >> 8),
                 else => std.debug.panic("Trying to read an invalid HIGH half register", .{})
             },
             .LOW => switch (regs) {
-                .AX => @intCast(self.ax & 0x00FF),
-                .BX => @intCast(self.bx & 0x00FF),
-                .CX => @intCast(self.cx & 0x00FF),
-                .DX => @intCast(self.dx & 0x00FF),
+                .AX => @intCast(self.ax & 0xff),
+                .BX => @intCast(self.bx & 0xff),
+                .CX => @intCast(self.cx & 0xff),
+                .DX => @intCast(self.dx & 0xff),
                 else => std.debug.panic("Trying to read an invalid LOW half register", .{})
             },
             else => std.debug.panic("Trying to read a 16bit register in 8bit reading mode", .{})
@@ -124,17 +123,17 @@ pub const Cpu = struct {
     pub fn write_reg8(self: *Cpu, regs: Register, half: RegisterHalf, val: u8) void {
         switch (half) {
             .HIGH => switch (regs) {
-                .AX => self.ax = (self.ax & 0x00FF) | @as(u16, @intCast(val)) << 8,
-                .BX => self.bx = (self.bx & 0x00FF) | @as(u16, @intCast(val)) << 8,
-                .CX => self.cx = (self.cx & 0x00FF) | @as(u16, @intCast(val)) << 8,
-                .DX => self.dx = (self.dx & 0x00FF) | @as(u16, @intCast(val)) << 8,
+                .AX => self.ax = (self.ax & 0xff) | @as(u16, @intCast(val)) << 8,
+                .BX => self.bx = (self.bx & 0xff) | @as(u16, @intCast(val)) << 8,
+                .CX => self.cx = (self.cx & 0xff) | @as(u16, @intCast(val)) << 8,
+                .DX => self.dx = (self.dx & 0xff) | @as(u16, @intCast(val)) << 8,
                 else => std.debug.panic("Trying to access an invalid HIGH half register", .{})
             },
             .LOW => switch (regs) {
-                .AX => self.ax = (self.ax & 0xFF00) | @as(u16, @intCast(val)),
-                .BX => self.bx = (self.bx & 0xFF00) | @as(u16, @intCast(val)),
-                .CX => self.cx = (self.cx & 0xFF00) | @as(u16, @intCast(val)),
-                .DX => self.dx = (self.dx & 0xFF00) | @as(u16, @intCast(val)),
+                .AX => self.ax = (self.ax & 0xff00) | @as(u16, @intCast(val)),
+                .BX => self.bx = (self.bx & 0xff00) | @as(u16, @intCast(val)),
+                .CX => self.cx = (self.cx & 0xff00) | @as(u16, @intCast(val)),
+                .DX => self.dx = (self.dx & 0xff00) | @as(u16, @intCast(val)),
                 else => std.debug.panic("Trying to access an invalid LOW half register", .{})
             },
             else => std.debug.panic("Trying to access a 16bit register in 8bit writing mode", .{})
@@ -153,6 +152,26 @@ pub const Emulator = struct {
             .ram = [_]u8{0} ** 0x100000,
             .rom = undefined
         };
+    }
+
+    pub fn write_mem8(self: *Emulator, addr: u16, value: u8) void {
+        self.ram[@intCast(addr)] = value;
+    }
+
+    pub fn read_mem8(self: *Emulator, addr: u16) u8 {
+        return self.ram[@intCast(addr)];
+    }
+
+    // x86 uses little endian
+    pub fn write_mem16(self: *Emulator, addr: u16, value: u16) void {
+        self.ram[@intCast(addr)] = @intCast(value & 0xff);
+        self.ram[@intCast(addr+1)] = @intCast((value & 0xff00) >> 8);
+    }
+
+    pub fn read_mem16(self: *Emulator, addr: u16) u16 {
+        const lo: u16 = @intCast(self.ram[@intCast(addr)]);
+        const hi: u16 = @intCast(self.ram[@intCast(addr+1)]);
+        return hi << 8 | lo;
     }
 
     pub fn loadRom(self: *Emulator, allocator: std.mem.Allocator, path: []const u8) !void {
@@ -193,5 +212,11 @@ pub fn main() !void {
     cpu.write_reg16(.AX, 0xdead);
     cpu.write_reg8(.AX, .LOW, 0xef);
     cpu.write_reg8(.AX, .HIGH, 0xbe);
-    std.debug.print("0x{x}\n",.{cpu.read_reg16(.AX)});
+    std.debug.print("reg ax: 0x{x}\n",.{cpu.read_reg16(.AX)});
+
+    // mem test
+    emu.write_mem8(0xde, 0xad);
+    emu.write_mem16(0xdead, 0xbeef);
+    std.debug.print("8mem at 0xde: 0x{x}\n",.{emu.read_mem8(0xde)});
+    std.debug.print("8mem at 0xdead: 0x{x}\n",.{emu.read_mem8(0xdead)});
 }
