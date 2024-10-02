@@ -59,10 +59,41 @@ pub const Cpu = struct {
     flags: u16,
 
     pub fn init(ip: u16) !Cpu {
-        var sys = std.mem.zeroes(Cpu);
-        sys.ip = ip;
-        return sys;
+        return .{
+            .ax = 0,
+            .bx = 0,
+            .cx = 0,
+            .dx = 0,
+            .si = 0,
+            .di = 0,
+            .sp = 0,
+            .bp = 0,
+            .cs = 0,
+            .ds = 0,
+            .es = 0,
+            .ss = 0,
+            .ip = ip,
+            .flags = 0,
+        };
     }
+
+    pub fn reset(self: *Cpu, ip: u16) void {
+        // reset regs
+        self.write_reg16(.AX, 0);
+        self.write_reg16(.BX, 0);
+        self.write_reg16(.CX, 0);
+        self.write_reg16(.DX, 0);
+        self.write_reg16(.SI, 0);
+        self.write_reg16(.DI, 0);
+        self.write_reg16(.SP, 0);
+        self.write_reg16(.BP, 0);
+        self.write_reg16(.CS, 0);
+        self.write_reg16(.DS, 0);
+        self.write_reg16(.ES, 0);
+        self.write_reg16(.SS, 0);
+        self.ip = ip;
+        self.flags = 0;
+    } 
 
     pub fn read_reg16(self: *Cpu, regs: Register) u16 {
         return switch (regs) {
