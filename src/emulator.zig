@@ -171,10 +171,16 @@ pub const Emulator = struct {
     pub fn read_mem16(self: *Emulator, addr: u16) u16 {
         const lo: u16 = @intCast(self.ram[@intCast(addr)]);
         const hi: u16 = @intCast(self.ram[@intCast(addr+1)]);
-        return hi << 8 | lo;
+        return lo & 0xff | hi << 8;
     }
 
-    pub fn loadRom(self: *Emulator, allocator: std.mem.Allocator, path: []const u8) !void {
+    pub fn load_ram(self: *Emulator, addr: u16, data: []u8) void {
+        for (0..data.len) |i| {
+            self.write_mem8(@intCast(addr+i), data[i]);
+        }
+    }
+
+    pub fn load_rom(self: *Emulator, allocator: std.mem.Allocator, path: []const u8) !void {
         const abs_path = try std.fs.realpathAlloc(allocator, path);
         defer allocator.free(abs_path);
 
@@ -198,7 +204,8 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     var emu = try Emulator.init();
-    try emu.loadRom(allocator, "example/test.bin");
+    try emu.load_rom(allocator, "example/test.bin");
+    emu.load_ram(0x0, emu.rom);
     defer allocator.free(emu.rom);
 
     // print the contents of the rom
@@ -209,14 +216,19 @@ pub fn main() !void {
 
     // register test
     var cpu = emu.cpu;
-    cpu.write_reg16(.AX, 0xdead);
+    cpu.write_reg16(.AX, 0xc418);
+    std.debug.print("reg ax: 0x{x}\n",.{cpu.read_reg16(.AX)});
     cpu.write_reg8(.AX, .LOW, 0xef);
     cpu.write_reg8(.AX, .HIGH, 0xbe);
+    std.debug.print("reg ah: 0x{x}\n",.{cpu.read_reg8(.AX, .HIGH)});
+    std.debug.print("reg al: 0x{x}\n",.{cpu.read_reg8(.AX, .LOW)});
     std.debug.print("reg ax: 0x{x}\n",.{cpu.read_reg16(.AX)});
 
     // mem test
-    emu.write_mem8(0xde, 0xad);
+    emu.write_mem8(0xfe, 0xb0);
+    emu.write_mem8(0xff, 0x02);
     emu.write_mem16(0xdead, 0xbeef);
-    std.debug.print("8mem at 0xde: 0x{x}\n",.{emu.read_mem8(0xde)});
-    std.debug.print("8mem at 0xdead: 0x{x}\n",.{emu.read_mem8(0xdead)});
+    std.debug.print("8mem at 0x00: 0x{x}\n",.{emu.read_mem8(0x00)});
+    std.debug.print("16mem at 0xfe: 0x{x}\n",.{emu.read_mem16(0xfe)});
+    std.debug.print("16mem at 0xdead: 0x{x}\n",.{emu.read_mem16(0xdead)});
 }
