@@ -192,7 +192,7 @@ pub const Cpu = struct {
         }
     }
 
-    pub fn mov_to_reg(self: *Cpu, reg: Register, oper: Operand) void {
+    pub fn mov_to_register(self: *Cpu, reg: Register, oper: Operand) void {
         switch (oper) {
             .immediate => |imm| {
                 switch (imm.size) {
