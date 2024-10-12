@@ -4,6 +4,7 @@ const panic = std.debug.panic;
 
 pub const Error = error{
     FileReadError,
+    EmuExecError
 };
 
 pub const OpMode = enum {
@@ -75,18 +76,18 @@ pub const Cpu = struct {
 
     pub fn reset(self: *Cpu, ip: u16) void {
         // reset regs
-        self.write_reg16(.AX, 0);
-        self.write_reg16(.BX, 0);
-        self.write_reg16(.CX, 0);
-        self.write_reg16(.DX, 0);
-        self.write_reg16(.SI, 0);
-        self.write_reg16(.DI, 0);
-        self.write_reg16(.SP, 0);
-        self.write_reg16(.BP, 0);
-        self.write_reg16(.CS, 0);
-        self.write_reg16(.DS, 0);
-        self.write_reg16(.ES, 0);
-        self.write_reg16(.SS, 0);
+        self.write_reg(.AX, 0);
+        self.write_reg(.BX, 0);
+        self.write_reg(.CX, 0);
+        self.write_reg(.DX, 0);
+        self.write_reg(.SI, 0);
+        self.write_reg(.DI, 0);
+        self.write_reg(.SP, 0);
+        self.write_reg(.BP, 0);
+        self.write_reg(.CS, 0);
+        self.write_reg(.DS, 0);
+        self.write_reg(.ES, 0);
+        self.write_reg(.SS, 0);
         self.ip = ip;
         self.flags = 0;
     }
@@ -132,23 +133,23 @@ pub const Cpu = struct {
                 }                
             },
             .register => |register| {
-                switch (register) {
-                    //.FULL => {
-                    //    const val = self.read_reg(register);
-                    //    self.write_reg(reg, val);
-                    //},
-                    //.HIGH => {
-                    //    const val = self.read_reg(register);
-                    //    self.write_reg(reg, val);
-                    //},
-                    //.LOW => {
-                    //    const val = self.read_reg(register);
-                    //    self.write_reg(reg, val);
-                    //},
-                    else => {}
+                const val = self.read_reg(register);
+                switch (reg) {
+                    .CS, .DS, .ES, .SS => {
+                        if (register == .CS or register == .DS or register == .ES or register == .SS) {
+                            panic("cannot copy value of one segment register to another segment register", .{});
+                        } else {
+                            self.write_reg(reg, val);
+                        }
+                    },
+                    else => self.write_reg(reg, val)
                 }
             }
         }
+    }
+
+    pub fn exec_instrution(self: *Cpu) !void {
+        _ = self;
     }
 };
 
@@ -207,6 +208,10 @@ pub const Emulator = struct {
             return Error.FileReadError;
         }
     }
+
+    pub fn exec(self: *Emulator) !void {
+        try self.cpu.exec_instrution();
+    }
 };
 
 pub fn main() !void {
@@ -225,15 +230,5 @@ pub fn main() !void {
     }
     print("\n", .{});
 
-    //emu.cpu.write_reg(.AX, 0xdead);
-    emu.cpu.write_reg(.AH, 0xde);
-    emu.cpu.write_reg(.AL, 0xad);
-    print("0x{x}\n", .{emu.cpu.read_reg(.AL)});
-
-    // register test
-    var cpu = emu.cpu;
-    cpu.mov_to_register(.AH, Operand{.immediate=Immediate{.value=0xbe,.size=.Byte}});
-    cpu.mov_to_register(.AL, Operand{.immediate=Immediate{.value=0xef,.size=.Byte}});
-    std.debug.print("reg bx: 0x{x}\n", .{cpu.read_reg(.BX)});
-    std.debug.print("reg ax: 0x{x}\n", .{cpu.read_reg(.AX)});
+    try emu.exec();
 }
