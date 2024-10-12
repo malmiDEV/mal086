@@ -4,7 +4,7 @@ const panic = std.debug.panic;
 
 pub const Error = error{
     FileReadError,
-    EmuExecError
+    WriteSegRegError,
 };
 
 pub const OpMode = enum {
@@ -66,7 +66,7 @@ pub const Cpu = struct {
     ip: u16,
     flags: u16,
 
-    pub fn init(ip: u16) !Cpu {
+    pub fn init(ip: u16) Cpu {
         return .{
             .regs = [_]u16{0} ** 11,
             .ip = ip,
@@ -124,11 +124,11 @@ pub const Cpu = struct {
         }
     }
 
-    pub fn mov_to_register(self: *Cpu, reg: Register, oper: Operand) void {
+    pub fn mov_to_register(self: *Cpu, reg: Register, oper: Operand) !void {
         switch (oper) {
             .immediate => |imm| {
                 switch (reg) {
-                    .CS, .DS, .ES, .SS => panic("cannot copy immediate value to segment register", .{}),
+                    .CS, .DS, .ES, .SS => return Error.WriteSegRegError,
                     else => self.write_reg(reg, imm.value)
                 }                
             },
@@ -137,12 +137,12 @@ pub const Cpu = struct {
                 switch (reg) {
                     .CS, .DS, .ES, .SS => {
                         if (register == .CS or register == .DS or register == .ES or register == .SS) {
-                            panic("cannot copy value of one segment register to another segment register", .{});
+                            return Error.WriteSegRegError;
                         } else {
                             self.write_reg(reg, val);
                         }
                     },
-                    else => self.write_reg(reg, val)
+                    else => self.write_reg(reg, val),
                 }
             }
         }
@@ -158,9 +158,9 @@ pub const Emulator = struct {
     ram: [0x100000]u8,
     rom: []u8,
 
-    pub fn init() !Emulator {
+    pub fn init() Emulator {
         return .{ 
-            .cpu = try Cpu.init(0), 
+            .cpu = Cpu.init(0), 
             .ram = [_]u8{0} ** 0x100000, 
             .rom = undefined,
         };
@@ -219,7 +219,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var emu = try Emulator.init();
+    var emu = Emulator.init();
     try emu.load_rom(allocator, "example/test.bin");
     emu.load_ram(0x0, emu.rom);
     defer allocator.free(emu.rom);
