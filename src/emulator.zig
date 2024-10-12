@@ -1,4 +1,6 @@
 const std = @import("std");
+const print = std.debug.print;
+const panic = std.debug.panic;
 
 pub const Error = error{
     FileReadError,
@@ -30,69 +32,42 @@ pub const Immediate = struct {
     size: DataSize,
 };
 
+pub const Register = enum {
+    AH,
+    BH,
+    CH,
+    DH,
+    AL,
+    BL,
+    CL,
+    DL,
+    AX,
+    BX,
+    CX,
+    DX,
+    SI,
+    DI,
+    SP,
+    BP,
+    CS,
+    DS,
+    ES,
+    SS,
+};
+
 pub const Operand = union(enum) {
     register: Register,
     immediate: Immediate,
 };
 
-pub const RegisterType = enum(u4) {
-    AX = 0,
-    BX = 1,
-    CX = 2,
-    DX = 3,
-    SI = 4,
-    DI = 5,
-    SP = 6,
-    BP = 7,
-    CS = 8,
-    DS = 9,
-    ES = 10,
-    SS = 11,
-    _,
-};
-
-pub const RegisterHalf = enum(u3) {
-    LOW = 1,
-    HIGH = 2,
-    FULL = 3,
-    _,
-};
-
-pub const Register = struct {
-    reg: RegisterType,
-    half: RegisterHalf,
-};
-
 pub const Cpu = struct {
-    ax: u16,
-    bx: u16,
-    cx: u16,
-    dx: u16,
-    si: u16,
-    di: u16,
-    sp: u16,
-    bp: u16,
-    cs: u16,
-    ds: u16,
-    es: u16,
-    ss: u16,
+    regs: [11]u16 = undefined,
     ip: u16,
     flags: u16,
 
     pub fn init(ip: u16) !Cpu {
         return .{
-            .ax = 0,
-            .bx = 0,
-            .cx = 0,
-            .dx = 0,
-            .si = 0,
-            .di = 0,
-            .sp = 0,
-            .bp = 0,
-            .cs = 0,
-            .ds = 0,
-            .es = 0,
-            .ss = 0,
+            .regs = [_]u16{0} ** 11,
             .ip = ip,
             .flags = 0,
         };
@@ -116,108 +91,60 @@ pub const Cpu = struct {
         self.flags = 0;
     }
 
-    pub fn read_reg16(self: *Cpu, regs: Register) u16 {
-        return switch (regs.reg) {
-            .AX => self.ax,
-            .BX => self.bx,
-            .CX => self.cx,
-            .DX => self.dx,
-            .SI => self.si,
-            .DI => self.di,
-            .SP => self.sp,
-            .BP => self.bp,
-            .CS => self.cs,
-            .DS => self.ds,
-            .ES => self.es,
-            .SS => self.ss,
-            else => std.debug.panic("Trying to read an invalid register", .{}),
-        };
-    }
-
-    pub fn read_reg8(self: *Cpu, regs: Register) u8 {
-        return switch (regs.half) {
-            .HIGH => switch (regs.reg) {
-                .AX => @intCast((self.ax & 0xff00) >> 8),
-                .BX => @intCast((self.bx & 0xff00) >> 8),
-                .CX => @intCast((self.cx & 0xff00) >> 8),
-                .DX => @intCast((self.dx & 0xff00) >> 8),
-                else => std.debug.panic("Trying to read an invalid HIGH half register", .{}),
+    pub fn read_reg(self: *Cpu, regs: Register) u16 {
+        switch(regs) {
+            .AX, .BX, .CX, .DX, .SI, .DI, .SP, .BP, .CS, .DS, .ES, .SS => |index| {
+                return self.regs[@intFromEnum(index) - 8];
             },
-            .LOW => switch (regs.reg) {
-                .AX => @intCast(self.ax & 0xff),
-                .BX => @intCast(self.bx & 0xff),
-                .CX => @intCast(self.cx & 0xff),
-                .DX => @intCast(self.dx & 0xff),
-                else => std.debug.panic("Trying to read an invalid LOW half register", .{}),
+            .AL, .BL, .CL, .DL => |index| {
+                return self.regs[@intFromEnum(index) - 4] & 0xff;
             },
-            else => std.debug.panic("Trying to read a 16bit register in 8bit reading mode", .{}),
-        };
-    }
-
-    pub fn write_reg16(self: *Cpu, regs: Register, val: u16) void {
-        switch (regs.reg) {
-            .AX => self.ax = val,
-            .BX => self.bx = val,
-            .CX => self.cx = val,
-            .DX => self.dx = val,
-            .SI => self.si = val,
-            .DI => self.di = val,
-            .SP => self.sp = val,
-            .BP => self.bp = val,
-            .CS => self.cs = val,
-            .DS => self.ds = val,
-            .ES => self.es = val,
-            .SS => self.ss = val,
-            else => std.debug.panic("Trying to read to an invalid register", .{}),
+            .AH, .BH, .CH, .DH => |index| {
+                return self.regs[@intFromEnum(index)] >> 8;
+            },
         }
+        
+        return 0;
     }
 
-    pub fn write_reg8(self: *Cpu, regs: Register, val: u8) void {
-        switch (regs.half) {
-            .HIGH => switch (regs.reg) {
-                .AX => self.ax = (self.ax & 0xff) | @as(u16, @intCast(val)) << 8,
-                .BX => self.bx = (self.bx & 0xff) | @as(u16, @intCast(val)) << 8,
-                .CX => self.cx = (self.cx & 0xff) | @as(u16, @intCast(val)) << 8,
-                .DX => self.dx = (self.dx & 0xff) | @as(u16, @intCast(val)) << 8,
-                else => std.debug.panic("Trying to access an invalid HIGH half register", .{}),
+    pub fn write_reg(self: *Cpu, regs: Register, value: u16) void {
+        switch (regs) {
+            .AX, .BX, .CX, .DX, .SI, .DI, .SP, .BP, .CS, .DS, .ES, .SS => |index| {
+                self.regs[@intFromEnum(index) - 8] = value;
             },
-            .LOW => switch (regs.reg) {
-                .AX => self.ax = (self.ax & 0xff00) | @as(u16, @intCast(val)),
-                .BX => self.bx = (self.bx & 0xff00) | @as(u16, @intCast(val)),
-                .CX => self.cx = (self.cx & 0xff00) | @as(u16, @intCast(val)),
-                .DX => self.dx = (self.dx & 0xff00) | @as(u16, @intCast(val)),
-                else => std.debug.panic("Trying to access an invalid LOW half register", .{}),
+            .AL, .BL, .CL, .DL => |index| {
+                const r: u16 = self.regs[@intFromEnum(index) - 4];
+                self.regs[@intFromEnum(index) - 4] = (r & 0xff00) | (value & 0xff);
             },
-            else => std.debug.panic("Trying to access a 16bit register in 8bit writing mode", .{}),
+            .AH, .BH, .CH, .DH => |index| {
+                const r: u16 = self.regs[@intFromEnum(index)];
+                self.regs[@intFromEnum(index)] = ((value & 0xff) << 8) | (r & 0xff);
+            },
         }
     }
 
     pub fn mov_to_register(self: *Cpu, reg: Register, oper: Operand) void {
         switch (oper) {
             .immediate => |imm| {
-                switch (imm.size) {
-                    .Word => {
-                        self.write_reg16(reg, imm.value);
-                    },
-                    .Byte => {
-                        self.write_reg8(reg, @intCast(imm.value));
-                    },
-                }
+                switch (reg) {
+                    .CS, .DS, .ES, .SS => panic("cannot copy immediate value to segment register", .{}),
+                    else => self.write_reg(reg, imm.value)
+                }                
             },
             .register => |register| {
-                switch (register.half) {
-                    .FULL => {
-                        const val: u16 = self.read_reg16(register);
-                        self.write_reg16(reg, val);
-                    },
-                    .HIGH => {
-                        const val: u8 = self.read_reg8(register);
-                        self.write_reg8(reg, val);
-                    },
-                    .LOW => {
-                        const val: u8 = self.read_reg8(register);
-                        self.write_reg8(reg, val);
-                    },
+                switch (register) {
+                    //.FULL => {
+                    //    const val = self.read_reg(register);
+                    //    self.write_reg(reg, val);
+                    //},
+                    //.HIGH => {
+                    //    const val = self.read_reg(register);
+                    //    self.write_reg(reg, val);
+                    //},
+                    //.LOW => {
+                    //    const val = self.read_reg(register);
+                    //    self.write_reg(reg, val);
+                    //},
                     else => {}
                 }
             }
@@ -294,14 +221,19 @@ pub fn main() !void {
 
     // print the contents of the rom
     for (0..emu.rom.len) |i| {
-        std.debug.print("{x} ", .{emu.rom[i]});
+        print("{x} ", .{emu.rom[i]});
     }
-    std.debug.print("\n", .{});
+    print("\n", .{});
+
+    //emu.cpu.write_reg(.AX, 0xdead);
+    emu.cpu.write_reg(.AH, 0xde);
+    emu.cpu.write_reg(.AL, 0xad);
+    print("0x{x}\n", .{emu.cpu.read_reg(.AL)});
 
     // register test
     var cpu = emu.cpu;
-    cpu.mov_to_reg(Register{.reg=.AX,.half=.HIGH}, Operand{.immediate=Immediate{.value=0xbe,.size=.Byte}});
-    cpu.mov_to_reg(Register{.reg=.AX,.half=.LOW}, Operand{.immediate=Immediate{.value=0xef,.size=.Byte}});
-    std.debug.print("reg bx: 0x{x}\n", .{cpu.read_reg16(Register{.reg=.BX, .half=.FULL})});
-    std.debug.print("reg ax: 0x{x}\n", .{cpu.read_reg16(Register{.reg=.AX, .half=.FULL})});
+    cpu.mov_to_register(.AH, Operand{.immediate=Immediate{.value=0xbe,.size=.Byte}});
+    cpu.mov_to_register(.AL, Operand{.immediate=Immediate{.value=0xef,.size=.Byte}});
+    std.debug.print("reg bx: 0x{x}\n", .{cpu.read_reg(.BX)});
+    std.debug.print("reg ax: 0x{x}\n", .{cpu.read_reg(.AX)});
 }
