@@ -363,6 +363,7 @@ pub const Emulator = struct {
         }
     }
 
+    // knowledge test
     pub fn debug_inst(self: *Emulator, allocator: std.mem.Allocator) !Instruction {
         var cpu = self.cpu;
         var pseudo_ip: u16 = 0;
