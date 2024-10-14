@@ -5,22 +5,30 @@ const panic = std.debug.panic;
 pub const Error = error{
     FileReadError,
     WriteSegRegError,
+    InvalidInstructionError,
 };
 
-pub const OpMode = enum {
-    Register,
-    Immediate,
-    Displacement,
-    Direct,
-    RegisterIndirect,
-    BasedIndexed,
-    Indexed,
-    Based,
-    BasedIndexedDisplacement,
-    String,
-    Input,
-    Output,
-    Relative,
+pub const Register = enum {
+    AL,
+    CL,
+    DL,
+    BL,
+    AH,
+    CH,
+    DH,
+    BH,
+    AX,
+    CX,
+    DX,
+    BX,
+    SP,
+    BP,
+    SI,
+    DI,
+    ES,
+    SS,
+    CS,
+    DS,
 };
 
 pub const DataSize = enum {
@@ -28,38 +36,184 @@ pub const DataSize = enum {
     Word,
 };
 
+pub const ModRm = enum {
+    Reg,
+    Seg,
+};
+
 pub const Immediate = struct {
+    data: union(enum) {
+        modrm: ModRm,
+        reg: Register,
+        int: u16,
+    },
     value: u16,
     size: DataSize,
 };
 
-pub const Register = enum {
-    AH,
-    BH,
-    CH,
-    DH,
-    AL,
-    BL,
-    CL,
-    DL,
-    AX,
-    BX,
-    CX,
-    DX,
-    SI,
-    DI,
-    SP,
-    BP,
-    CS,
-    DS,
-    ES,
-    SS,
+pub const Prefix = enum(u8) {
+    CS = 0x2e,
+    DS = 0x3e,
+    ES = 0x26,
+    SS = 0x36,
+    _,
+};
+
+pub const Displacement = struct {
+    lo: i8,
+    hi: i16,
 };
 
 pub const Operand = union(enum) {
     register: Register,
     immediate: Immediate,
+    displacement: Displacement,
 };
+
+pub const Opcode = enum {
+    MOV,
+    ADD,
+    SUB,
+    CMP,
+    JE,
+    JL,
+    JLE,
+    JB,
+    JBE,
+    JP,
+    JO,
+    JS,
+    JNZ,
+    JNL,
+    JNLE,
+    JNB,
+    JNBE,
+    JNP,
+    JNO,
+    JNS,
+    LOOP,
+    LOOPZ,
+    LOOPNZ,
+    JCXZ,
+};
+
+pub const Instruction = struct {
+    prefix: ?Prefix = null,
+    opcode: Opcode,
+    operand: Operand,
+    size: u8,
+};
+
+fn generate_instruction_map(allocator: std.mem.Allocator) !std.AutoHashMap(u8, Instruction) {
+    var map = std.AutoHashMap(u8, Instruction).init(allocator);
+
+    // mov to register immediate
+    //
+    // mov al, ib .. mov bh, ib
+    //
+    try map.put(0xb0, Instruction{
+        .prefix = null,
+        .opcode = .MOV,
+        .operand = Operand{ 
+            .immediate = Immediate{ 
+                .data = .{.reg = .AL }, 
+                .value = 0, 
+                .size = .Byte 
+            } 
+        },
+        .size = 0,
+    });
+    try map.put(0xb1, Instruction{
+        .prefix = null,
+        .opcode = .MOV,
+        .operand = Operand{ 
+            .immediate = Immediate{ 
+                .data = .{.reg = .CL }, 
+                .value = 0, 
+                .size = .Byte 
+            } 
+        },
+        .size = 0,
+    });
+    try map.put(0xb2, Instruction{
+        .prefix = null,
+        .opcode = .MOV,
+        .operand = Operand{ 
+            .immediate = Immediate{ 
+                .data = .{.reg = .DL }, 
+                .value = 0, 
+                .size = .Byte 
+            } 
+        },
+        .size = 0,
+    });
+    try map.put(0xb3, Instruction{
+        .prefix = null,
+        .opcode = .MOV,
+        .operand = Operand{ 
+            .immediate = Immediate{ 
+                .data = .{.reg = .BL }, 
+                .value = 0, 
+                .size = .Byte 
+            } 
+        },
+        .size = 0,
+    });
+    try map.put(0xb4, Instruction{
+        .prefix = null,
+        .opcode = .MOV,
+        .operand = Operand{ 
+            .immediate = Immediate{ 
+                .data = .{.reg = .AH }, 
+                .value = 0, 
+                .size = .Byte 
+            } 
+        },
+        .size = 0,
+    });
+    try map.put(0xb5, Instruction{
+        .prefix = null,
+        .opcode = .MOV,
+        .operand = Operand{ 
+            .immediate = Immediate{ 
+                .data = .{.reg = .CH }, 
+                .value = 0, 
+                .size = .Byte 
+            } 
+        },
+        .size = 0,
+    });
+    try map.put(0xb6, Instruction{
+        .prefix = null,
+        .opcode = .MOV,
+        .operand = Operand{ 
+            .immediate = Immediate{ 
+                .data = .{.reg = .DH }, 
+                .value = 0, 
+                .size = .Byte 
+            } 
+        },
+        .size = 0,
+    });
+    try map.put(0xb7, Instruction{
+        .prefix = null,
+        .opcode = .MOV,
+        .operand = Operand{ 
+            .immediate = Immediate{ 
+                .data = .{.reg = .BH }, 
+                .value = 0, 
+                .size = .Byte 
+            } 
+        },
+        .size = 0,
+    });
+
+    //
+    // mov ax, iv .. mov di, iv
+    //
+
+    return map;
+}
 
 pub const Cpu = struct {
     regs: [11]u16 = undefined,
@@ -93,33 +247,33 @@ pub const Cpu = struct {
     }
 
     pub fn read_reg(self: *Cpu, regs: Register) u16 {
-        switch(regs) {
-            .AX, .BX, .CX, .DX, .SI, .DI, .SP, .BP, .CS, .DS, .ES, .SS => |index| {
+        switch (regs) {
+            .AX, .CX, .DX, .BX, .SP, .BP, .SI, .DI, .ES, .SS, .CS, .DS  => |index| {
                 return self.regs[@intFromEnum(index) - 8];
             },
-            .AL, .BL, .CL, .DL => |index| {
-                return self.regs[@intFromEnum(index) - 4] & 0xff;
+            .AL, .CL, .DL, .BL=> |index| {
+                return self.regs[@intFromEnum(index)] & 0xff;
             },
-            .AH, .BH, .CH, .DH => |index| {
-                return self.regs[@intFromEnum(index)] >> 8;
+            .AH, .CH, .DH, .BL=> |index| {
+                return self.regs[@intFromEnum(index) - 4] >> 8;
             },
         }
-        
+
         return 0;
     }
 
     pub fn write_reg(self: *Cpu, regs: Register, value: u16) void {
         switch (regs) {
-            .AX, .BX, .CX, .DX, .SI, .DI, .SP, .BP, .CS, .DS, .ES, .SS => |index| {
+            .AX, .CX, .DX, .BX, .SP, .BP, .SI, .DI, .ES, .SS, .CS, .DS => |index| {
                 self.regs[@intFromEnum(index) - 8] = value;
             },
-            .AL, .BL, .CL, .DL => |index| {
-                const r: u16 = self.regs[@intFromEnum(index) - 4];
-                self.regs[@intFromEnum(index) - 4] = (r & 0xff00) | (value & 0xff);
-            },
-            .AH, .BH, .CH, .DH => |index| {
+            .AL, .CL, .DL  .BL,=> |index| {
                 const r: u16 = self.regs[@intFromEnum(index)];
-                self.regs[@intFromEnum(index)] = ((value & 0xff) << 8) | (r & 0xff);
+                self.regs[@intFromEnum(index)] = (r & 0xff00) | (value & 0xff);
+            },
+            .AH, .CH, .DH  .BH,=> |index| {
+                const r: u16 = self.regs[@intFromEnum(index)];
+                self.regs[@intFromEnum(index) - 4] = ((value & 0xff) << 8) | (r & 0xff);
             },
         }
     }
@@ -129,8 +283,8 @@ pub const Cpu = struct {
             .immediate => |imm| {
                 switch (reg) {
                     .CS, .DS, .ES, .SS => return Error.WriteSegRegError,
-                    else => self.write_reg(reg, imm.value)
-                }                
+                    else => self.write_reg(reg, imm.value),
+                }
             },
             .register => |register| {
                 const val = self.read_reg(register);
@@ -144,7 +298,7 @@ pub const Cpu = struct {
                     },
                     else => self.write_reg(reg, val),
                 }
-            }
+            },
         }
     }
 
@@ -159,9 +313,9 @@ pub const Emulator = struct {
     rom: []u8,
 
     pub fn init() Emulator {
-        return .{ 
-            .cpu = Cpu.init(0), 
-            .ram = [_]u8{0} ** 0x100000, 
+        return .{
+            .cpu = Cpu.init(0x7c00),
+            .ram = [_]u8{0} ** 0x100000,
             .rom = undefined,
         };
     }
@@ -186,7 +340,7 @@ pub const Emulator = struct {
         return lo & 0xff | hi << 8;
     }
 
-    pub fn load_ram(self: *Emulator, addr: u16, data: []u8) void {
+    pub fn load_ram(self: *Emulator, addr: u16, data: []const u8) void {
         for (0..data.len) |i| {
             self.write_mem8(@intCast(addr + i), data[i]);
         }
@@ -209,6 +363,52 @@ pub const Emulator = struct {
         }
     }
 
+    pub fn debug_inst(self: *Emulator, allocator: std.mem.Allocator) !Instruction {
+        var cpu = self.cpu;
+        var pseudo_ip: u16 = 0;
+        var size: u8 = 0;
+        _ = size;
+
+        // check segment override prefix
+        var prefix: ?Prefix = blk: {
+            switch (@as(Prefix, @enumFromInt(self.read_mem8(pseudo_ip+cpu.ip)))) {
+                .CS, .DS, .ES, .SS => |data| {
+                    pseudo_ip += 1;
+                    break :blk data;
+                },
+                else => break :blk null,
+            }
+        };
+
+        var map = try generate_instruction_map(allocator);
+        defer map.deinit();
+        
+        var opcode: Opcode = undefined;
+        var operand: Operand = undefined;
+        switch (self.read_mem8(pseudo_ip+cpu.ip)) {
+            // mov ah, ib .. mov bh, ib
+            0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7 => |b| {
+                var inst = map.get(b).?;
+                const inst_op = inst.operand.immediate;
+                switch (inst_op.size) {
+                    .Byte => pseudo_ip += 1,
+                    .Word => pseudo_ip += 2,
+                }
+                const value = self.read_mem8(pseudo_ip+cpu.ip);
+                opcode = inst.opcode;
+                operand = Operand{.immediate=Immediate{.data=inst_op.data, .value = value, .size=inst_op.size}};
+            },
+            else => return Error.InvalidInstructionError,
+        }
+
+        return .{ 
+            .prefix = prefix, 
+            .opcode = opcode, 
+            .operand = operand, 
+            .size = @intCast(pseudo_ip) 
+        };
+    }
+
     pub fn exec(self: *Emulator) !void {
         try self.cpu.exec_instrution();
     }
@@ -221,14 +421,23 @@ pub fn main() !void {
 
     var emu = Emulator.init();
     try emu.load_rom(allocator, "example/test.bin");
-    emu.load_ram(0x0, emu.rom);
+    emu.load_ram(0x7c00, emu.rom);
     defer allocator.free(emu.rom);
 
+    //mov ax, 0xdead
+    //mov bx, ax
     // print the contents of the rom
     for (0..emu.rom.len) |i| {
         print("{x} ", .{emu.rom[i]});
     }
     print("\n", .{});
+
+    const inst = try emu.debug_inst(allocator);
+    print("prefix: {?}\n", .{inst.prefix});
+    print("opcode: {?}\n", .{inst.opcode});
+    print("operand: {?}\n", .{inst.operand.immediate.data.reg});
+    print("imm val: 0x{x}\n", .{inst.operand.immediate.value});
+    print("size: {?}\n", .{inst.size});
 
     try emu.exec();
 }
